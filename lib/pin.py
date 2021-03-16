@@ -91,14 +91,64 @@ class AnalogOut(AnalogType):
         self.updated.emit(self.get_value())
 
 
-class DiscreteIn:
-    pass
+class DiscreteType(QObject):
+    updated = pyqtSignal(bool)
+    changed = pyqtSignal(bool)
+    on = pyqtSignal()
+    off = pyqtSignal()
+    rise = pyqtSignal()
+    fall = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self._sensor_value: bool = False
+        self.timestamp = time.time()
+
+    def get_value(self) -> bool:
+        return self._sensor_value
+
+    def signals_emit(self, value):
+        if self._sensor_value != value:
+            self.changed.emit(value)
+            if value:
+                self.rise.emit()
+            else:
+                self.fall.emit()
+        if value:
+            self.on.emit()
+        else:
+            self.off.emit()
+        self.updated.emit(value)
 
 
-class DiscreteOut:
-    pass
+class DiscreteIn(DiscreteType):
+    @pyqtSlot(bool)
+    def set_sensor_value(self, value: bool):
+        self.timestamp = time.time()
+        self.signals_emit(value)
+        self._sensor_value = value
 
 
+class DiscreteOut(DiscreteType):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._need_update: bool = False
+
+    @property
+    def need_update(self) -> bool:
+        return self._need_update
+
+    def set_value(self, value: bool):
+        self._need_update = True
+        self._sensor_value = value
+
+    def set_sensor_value(self, value: bool):
+        self.timestamp = time.time()
+        self.signals_emit(value)
+        if self._sensor_value == value:
+            self._need_update = False
+
+# todo разобраться с сигналамию Вынести в отдельный метод, упростить
 class MultiStateIn:
     pass
 

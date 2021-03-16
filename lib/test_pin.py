@@ -1,5 +1,5 @@
 import pytest
-from lib.pin import AnalogIn, AnalogOut
+from lib.pin import AnalogIn, AnalogOut, DiscreteIn, DiscreteOut
 
 
 @pytest.fixture(scope='function',
@@ -52,3 +52,32 @@ def test_ao(ao_param):
     assert sensor_value == ao.sensor_value
     ao.set_sensor_value(sensor_value)
     assert not ao.need_update
+
+
+def test_di():
+    di = DiscreteIn()
+    assert not di.get_value()
+    di.set_sensor_value(True)
+    assert di.get_value()
+    di.set_sensor_value(False)
+    assert not di.get_value()
+
+
+def test_do():
+    do = DiscreteOut()
+    assert not do.need_update
+    assert not do.get_value()
+
+    do.set_value(True)
+    assert do.need_update
+    assert do.get_value()
+    do.set_sensor_value(True)
+    assert not do.need_update
+    assert do.get_value()
+
+    do.set_value(False)
+    assert do.need_update
+    assert not do.get_value()
+    do.set_sensor_value(False)
+    assert not do.need_update
+    assert not do.get_value()
