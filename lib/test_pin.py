@@ -25,7 +25,10 @@ def ai_param(request):
 
 def test_ai(ai_param):
     low, high, s_low, s_high, sensor, value = ai_param
-    ai = AnalogIn(low=low, high=high, sensor_low=s_low, sensor_high=s_high)
+    ai = AnalogIn()
+    assert (ai.value_low, ai.value_high, ai.sensor_low, ai.sensor_high) == (0.0, 1.0, 0, 20000)
+    ai.set_range(s_low, s_high, low, high)
+    assert (ai.value_low, ai.value_high, ai.sensor_low, ai.sensor_high) == (low, high, s_low, s_high)
     ai.set_sensor_value(sensor)
     assert ai.get_value() == value
 
@@ -45,14 +48,16 @@ def ao_param(request):
 
 def test_ao(ao_param):
     low, high, s_low, s_high, value, sensor_value = ao_param
-    ao = AnalogOut(low=low, high=high, sensor_low=s_low, sensor_high=s_high)
+    ao = AnalogOut()
+    assert (ao.value_low, ao.value_high, ao.sensor_low, ao.sensor_high) == (0.0, 1.0, 0, 20000)
+    ao.set_range(s_low, s_high, low, high)
+    assert (ao.value_low, ao.value_high, ao.sensor_low, ao.sensor_high) == (low, high, s_low, s_high)
     assert not ao.need_update
     ao.set_value(value)
     assert ao.need_update
     assert sensor_value == ao.sensor_value
     ao.set_sensor_value(sensor_value)
     assert not ao.need_update
-
 
 def test_di():
     di = DiscreteIn()
@@ -81,3 +86,4 @@ def test_do():
     do.set_sensor_value(False)
     assert not do.need_update
     assert not do.get_value()
+

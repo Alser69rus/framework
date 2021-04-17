@@ -1,86 +1,67 @@
-import time
-
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QObject, pyqtSignal
 
 
 class AnalogType(QObject):
     updated = pyqtSignal(float)
 
-    def __init__(self,
-                 low: float = 0.0,
-                 high: float = 1.0,
-                 sensor_low: int = 0,
-                 sensor_high: int = 20000,
-                 precision: int = 3,
-                 parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.active: bool = True
-        self._sensor_value: int = sensor_low
-        self.precision: int = precision
-        self.low: float = low
-        self.high: float = high
+        self.sensor_value: int = 0
+        self.precision: int = 3
+        self.sensor_low: int = 0
+        self.sensor_high: int = 20000
+        self.value_low: float = 0
+        self.value_high: float = 1.0
+
+    def set_range(self,
+                  sensor_low: int = 0, sensor_high: int = 20000,
+                  value_low: float = 0, value_high: float = 1.0):
         self.sensor_low: int = sensor_low
         self.sensor_high: int = sensor_high
-        self.timestamp = time.time()
-
-    def get_value(self) -> float:
-        s_range = self.sensor_high - self.sensor_low
-        v_range = self.high - self.low
-        value = self.low + (self._sensor_value - self.sensor_low) * v_range / s_range
-        return round(value, self.precision)
+        self.value_low: float = value_low
+        self.value_high: float = value_high
 
     @property
-    def sensor_value(self) -> int:
-        return self._sensor_value
+    def slope(self) -> float:
+        return (self.value_high-self.value_low)/(self.sensor_high-self.sensor_low)
+
+    @property
+    def offset(self) -> float:
+        return self.value_low-self.sensor_low*self.slope
+
+    def get_value(self):
+        return round(self.sensor_value*self.slope+self.offset, self.precision)
 
 
 class AnalogIn(AnalogType):
-    @pyqtSlot(int)
-    def set_sensor_value(self, sensor_value: int):
-        if not self.active:
-            return
-        self.timestamp = time.time()
-        self._sensor_value = sensor_value
+
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+
+    def set_sensor_value(self, value: int):
+        if value != self.sensor_value:
+            self.sensor_value = value
         self.updated.emit(self.get_value())
 
 
 class AnalogOut(AnalogType):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._need_update: bool = False
 
-    @property
-    def need_update(self):
-        return self._need_update
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.need_update: bool = False
 
-    @pyqtSlot(float)
     def set_value(self, value: float):
-        if not self.active:
-            return
+        v = round((value-self.offset)/self.slope)
+        if v < self.sensor_low:
+            v = self.sensor_low
+        if v > self.sensor_high:
+            v = self.sensor_high
+        self.sensor_value = v
+        self.need_update = True
 
-        s_range = self.sensor_high - self.sensor_low
-        v_range = self.high - self.low
-        sensor_value = self.sensor_low + (value - self.low) * s_range / v_range
-        sensor_value = round(sensor_value)
-
-        s_min = min(self.sensor_low, self.sensor_high)
-        s_max = max(self.sensor_low, self.sensor_high)
-        if sensor_value < s_min:
-            sensor_value = s_min
-        elif sensor_value > s_max:
-            sensor_value = s_max
-
-        self._need_update = True
-        self._sensor_value = sensor_value
-
-    @pyqtSlot(int)
-    def set_sensor_value(self, sensor_value: int):
-        if not self.active:
-            return
-
-        self.timestamp = time.time()
-        if self._sensor_value == sensor_value:
-            self._need_update = False
+    def set_sensor_value(self, value: int):
+        if value == self.sensor_value:
+            self.need_update = False
         self.updated.emit(self.get_value())
 
 
@@ -93,55 +74,43 @@ class DiscreteType(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.active: bool = True
-        self._sensor_value: bool = False
-        self.timestamp = time.time()
+        self.sensor_value: bool = False
 
     def get_value(self) -> bool:
-        return self._sensor_value
+        return self.sensor_value
 
-    def signals_emit(self, value):
-        if self._sensor_value != value:
-            if value:
-                self.rise.emit()
-            else:
-                self.fall.emit()
-        if value:
+    def emit_sinals(self, old_value: bool, new_value: bool):
+        if new_value:
             self.on.emit()
         else:
             self.off.emit()
-        self.updated.emit(value)
+
+        if not old_value and new_value:
+            self.rise.emit()
+        if old_value and not new_value:
+            self.fall.emit()
+
+        self.updated.emit(new_value)
 
 
 class DiscreteIn(DiscreteType):
-    @pyqtSlot(bool)
     def set_sensor_value(self, value: bool):
-        if not self.active:
-            return
-        self.timestamp = time.time()
-        self.signals_emit(value)
-        self._sensor_value = value
+        old = self.sensor_value
+        self.sensor_value = value
+        self.emit_sinals(old, value)
 
 
 class DiscreteOut(DiscreteType):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._need_update: bool = False
-
-    @property
-    def need_update(self) -> bool:
-        return self._need_update
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.need_update: bool = False
 
     def set_value(self, value: bool):
-        if not self.active:
-            return
-        self._need_update = True
-        self._sensor_value = value
+        self.sensor_value = value
+        self.need_update = True
 
     def set_sensor_value(self, value: bool):
-        if not self.active:
-            return
-        self.timestamp = time.time()
-        self.signals_emit(value)
-        if self._sensor_value == value:
-            self._need_update = False
+        old = self.sensor_value
+        if self.sensor_value == value:
+            self.need_update = False
+        self.emit_sinals(old, value)
