@@ -1,6 +1,7 @@
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, pyqtSignal
 from lib.pin import AnalogIn
 from typing import List
+import logging
 
 
 # class OwenModule(QtCore.QObject):
@@ -79,22 +80,39 @@ from typing import List
 #         self.updated.emit()
 #         return values
 
-class MV1108AC(QObject):
+class AI(QObject):
+    updated = pyqtSignal()
+    warning = pyqtSignal(str)
+
     def __init__(self, port, unit: int = 16, parent=None):
         super().__init__(parent=parent)
         self.port = port
         self.unit: int = unit
-        self.pin: List[AnalogIn] = [AnalogIn()] * 8
-
-    def check(self) -> bool:
-        pass
+        self.active: bool = True
+        self.name: str = ''
+        self.pin: List[AnalogIn] = []
 
     def update(self):
-        rr = self.port.read_holding_registers(0x100, 8, unit=self.unit)
+        if not self.active:
+            return
+        rr = self.read_data()
         if rr.isError():
-            # logging.warning(f"не удалось прочитать {self.name} с ошибкой {rr}")
+            logging.warning(f"не удалось прочитать {self.name} с ошибкой {rr}")
+            self.warning.emit(f'{rr}')
             return
         for i, pin in enumerate(self.pin):
             pin.set_sensor_value(rr.registers[i])
-        # self.timestamp = datetime.now()
-        # self.updated.emit()
+        self.updated.emit()
+
+    def read_data(self) -> List:
+        pass
+
+
+class MV1108AC(AI):
+    def __init__(self, port, unit: int = 16, parent=None):
+        super().__init__(port=port, unit=unit, parent=parent)
+        self.pin: List[AnalogIn] = [AnalogIn()] * 8
+        self.name = 'МВ8АС'
+
+    def read_data(self) -> List:
+        return self.port.read_holding_registers(0x100, 8, unit=self.unit)
